@@ -1,6 +1,6 @@
 # Credit Risk Portfolio Analytics
 
-The FastAPI foundation, descriptive data pipeline, portfolio API, exploratory models, and first React dashboard are implemented. AI integrations remain in development.
+The FastAPI foundation, descriptive data pipeline, portfolio API, exploratory models, anomaly review and Gemini assistant are implemented. Gemini and hosted PostgreSQL integrations require end-to-end verification with the user's own credentials.
 
 ## Backend setup (Windows PowerShell)
 
@@ -24,6 +24,12 @@ Build the analysis-ready account dataset from the supplied CSV files with:
 This creates `data/processed/accounts.csv` and `data/processed/quality_report.json`. See [data pipeline decisions](docs/data_pipeline.md) for joins, missing values, and timing limitations. Processed data is regenerated locally and is not committed.
 
 Train the exploratory models after building the data with `.\.venv\Scripts\python -m src.backend.model`. The metrics and account scores are generated in `data/processed`. The API exposes `/api/model/metrics` and `/api/accounts/ACC200001/risk`. See [model limitations and monitoring](docs/model.md) before interpreting scores.
+
+Build anomaly flags with `.\.venv\Scripts\python -m src.backend.anomalies`. The API lists flagged accounts at `/api/anomalies` and records decisions through `POST /api/anomalies/{account_id}/review`. The Isolation Forest is trained separately per loan type on full descriptive repayment and bureau histories; feature percentiles are peer context rather than exact model explanations. It is an investigative aid, not a decision system.
+
+Review decisions use `data/processed/reviews.sqlite3` locally. For a hosted app, set `APP_ENV=production` and set `DATABASE_URL` to a PostgreSQL connection string in the backend's server-side environment. No database URL is needed to work locally. Production mode rejects missing database configuration rather than silently storing reviews on an ephemeral disk. The database user must be able to create and update the `anomaly_reviews` table. Never commit the URL or put it in the frontend. Hosted PostgreSQL connectivity has not yet been verified. Review actions are currently public and unauthenticated for the demo; anyone with access can change them. Add access controls and audit history before any real use.
+
+The assistant requires `GEMINI_API_KEY` in the backend `.env` or server environment and accepts an optional `GEMINI_MODEL` (default `gemini-3.5-flash-lite`; model access and free-tier quotas depend on your account). With no key it returns an informative 503 error. It sends the question and supported schema to Gemini, validates the interpreted request, and computes numerical results from `data/processed/accounts.csv` locally. It supports a bounded set of counts, default rates and original loan amounts, with optional filters and a single grouping. It declines unsupported requests; interpretations can still be wrong and require analyst review. It makes one provider call per submitted question and enforces a small per-process request limit. Gemini was not called during implementation, at the user's request.
 
 After building the data, the API exposes `/api/portfolio/summary`, `/api/portfolio/filters`, `/api/portfolio/breakdown?dimension=loan_type`, and `/api/accounts/ACC200001`. Summary and breakdown accept optional `region`, `loan_type`, and `employment_type` filters. Breakdown dimensions are `region`, `employment_type`, `loan_type`, `age_band`, and `income_band`. Exposure currently means original loan amount, not outstanding balance. API docs at `/docs` let you try these endpoints.
 
